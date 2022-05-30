@@ -1,0 +1,65 @@
+kind: pipeline
+name: build
+type: kubernetes
+
+resources:
+  requests:
+    memory: 256Mi
+
+steps:
+- name: build
+  image: golang:1.18-alpine
+  pull: always
+  commands:
+    - apk --no-cache add binutils
+    - CGO_ENABLED=0 go install github.com/go-graphite/go-carbon@latest
+    - CGO_ENABLED=0 go install github.com/go-graphite/carbonapi/cmd/carbonapi@latest
+    - strip -s /go/bin/*
+    - cp /go/bin/go-carbon go-carbon/
+    - cp /go/bin/carbonapi carbonapi/
+
+- name: go-carbon
+  image: plugins/docker
+  pull: always
+  settings:
+    context: go-carbon
+    dockerfile: go-carbon/Dockerfile
+    repo: ghcr.io/kubernetize/go-graphite/go-carbon
+    registry: ghcr.io
+    username: rkojedzinszky
+    password:
+      from_secret: ghcr.io.password
+    auto_tag: true
+    auto_label: false
+    mirror:
+      from_secret: hub_docker_mirror
+
+  privileged: true
+  volumes:
+    - name: docker
+      path: /var/lib/docker
+
+- name: carbonapi
+  image: plugins/docker
+  pull: always
+  settings:
+    context: carbonapi
+    dockerfile: carbonapi/Dockerfile
+    repo: ghcr.io/kubernetize/go-graphite/carbonapi
+    registry: ghcr.io
+    username: rkojedzinszky
+    password:
+      from_secret: ghcr.io.password
+    auto_tag: true
+    auto_label: false
+    mirror:
+      from_secret: hub_docker_mirror
+
+  privileged: true
+  volumes:
+    - name: docker
+      path: /var/lib/docker
+
+volumes:
+  - name: docker
+    temp: {}
